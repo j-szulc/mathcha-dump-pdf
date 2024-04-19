@@ -1,9 +1,8 @@
 const puppeteer = require("puppeteer"); // v20.7.4 or later
 const mathcha = require("./mathcha");
-const { sleep } = require("./utils");
+const { sleep, gen_path_unique } = require("./utils");
 const { timeout, defaultDelay } = require("./config");
 const reader = require("readline-sync");
-const sanitize_filename = require("sanitize-filename");
 
 (async () => {
 	const browser = await puppeteer.launch({
@@ -44,8 +43,7 @@ const sanitize_filename = require("sanitize-filename");
 
 	for ({ element, title, parents } of docs) {
 		parents.reverse();
-		const target_path = [...parents, title].map(sanitize_filename);
-		const target_pdf = `./pdfs/${target_path.join("/")}.pdf`;
+		const target_pdf = gen_path_unique(parents, title);
 		console.log(`Processing: ${target_pdf}`);
 		await element.click({ clickCount: 2 });
 		await sleep();
