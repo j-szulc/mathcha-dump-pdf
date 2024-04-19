@@ -1,6 +1,6 @@
 const puppeteer = require("puppeteer"); // v20.7.4 or later
 const { print, sleep } = require("./utils");
-const timeout = 5000;
+const { timeout } = require("./config");
 
 const disappear_quick_start = async (targetPage) => {
 	await puppeteer.Locator.race([
@@ -49,18 +49,18 @@ const esc = async (targetPage) => {
 
 const process_current_document = async (targetPage) => {
 	await print_meta_p(targetPage);
-	await sleep(1000);
+	await sleep();
 	await print_preview_button(targetPage);
-	await sleep(1000);
+	await sleep();
 	targetPage.waitForSelector("#print-container");
-	await sleep(1000);
+	await sleep();
 	const pdf_options = {
 		path: "output.pdf",
 		format: "A4",
 	};
 	await print(targetPage, pdf_options);
 	await esc(targetPage);
-	await sleep(1000);
+	await sleep();
 	await esc(targetPage);
 };
 

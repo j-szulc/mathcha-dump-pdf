@@ -1,8 +1,7 @@
 const puppeteer = require("puppeteer"); // v20.7.4 or later
 const mathcha = require("./mathcha");
 const { sleep } = require("./utils");
-const timeout = 5000;
-
+const { timeout, defaultDelay } = require("./config");
 const reader = require("readline-sync");
 
 (async () => {
@@ -36,14 +35,18 @@ const reader = require("readline-sync");
 		await Promise.all(promises);
 	}
 
-	reader.question("Press any key to continue or Ctrl+C to exit: ");
+	reader.question(`Please:
+	1. Login to your Mathcha account
+	2. Expand all documents
+	3. Press any key to continue or Ctrl+C to exit.
+	`);
 	docs = await mathcha.get_documents(page);
 
 	for (element of docs) {
 		await element.click();
-		await sleep(1000);
+		await sleep();
 		await mathcha.process_current_document(page);
-		reader.question("Press any key to continue or Ctrl+C to exit: ");
+		await sleep();
 	}
 
 	await browser.close();

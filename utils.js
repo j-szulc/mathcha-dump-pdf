@@ -1,6 +1,7 @@
 const fs = require("fs");
+const { defaultDelay } = require("./config");
 
-function sleep(ms) {
+function sleep(ms = defaultDelay) {
 	return new Promise((resolve) => {
 		setTimeout(resolve, ms);
 	});
