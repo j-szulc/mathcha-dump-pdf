@@ -3,6 +3,7 @@ const mathcha = require("./mathcha");
 const { sleep } = require("./utils");
 const { timeout, defaultDelay } = require("./config");
 const reader = require("readline-sync");
+const sanitize_filename = require("sanitize-filename");
 
 (async () => {
 	const browser = await puppeteer.launch({
@@ -42,10 +43,12 @@ const reader = require("readline-sync");
 	docs = await mathcha.get_documents(page);
 
 	for ({ element, title, parents } of docs) {
-		console.log(parents.join(" > "), title);
-		await element.click();
+		const target_path = [...parents, title].map(sanitize_filename);
+		const target_pdf = `./pdfs/${target_path.join("/")}.pdf`;
+		console.log(`Processing: ${target_pdf}`);
+		await element.click({ clickCount: 2 });
 		await sleep();
-		await mathcha.process_current_document(page, "output.pdf");
+		await mathcha.process_current_document(page, target_pdf);
 		await sleep();
 	}
 

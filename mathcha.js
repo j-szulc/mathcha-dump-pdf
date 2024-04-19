@@ -54,11 +54,10 @@ const process_current_document = async (targetPage, targetPdf) => {
 	await sleep();
 	targetPage.waitForSelector("#print-container");
 	await sleep();
-	const pdf_options = {
-		path: targetPdf,
+	const pdfOptions = {
 		format: "A4",
 	};
-	await print(targetPage, pdf_options);
+	await print(targetPage, targetPdf, pdfOptions);
 	await esc(targetPage);
 	await sleep();
 	await esc(targetPage);
@@ -84,7 +83,6 @@ const get_documents = async (targetPage) => {
 			parent = await parent.getProperty("parentNode")
 		) {
 			const tagName = await parent.evaluate((el) => el.tagName);
-			// console.log(tagName);
 			if ([null, undefined, "BODY", "HEAD", "HTML"].includes(tagName)) {
 				break;
 			}
