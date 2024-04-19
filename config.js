@@ -1,5 +1,5 @@
-const timeout = 5000;
-const defaultDelay = 1000;
+const timeout = 10000;
+const defaultDelay = 2000;
 
 module.exports = {
 	timeout,

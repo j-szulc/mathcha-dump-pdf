@@ -21,8 +21,8 @@ const sanitize_filename = require("sanitize-filename");
 	{
 		const targetPage = page;
 		await targetPage.setViewport({
-			width: 869,
-			height: 817,
+			width: 1440,
+			height: 900,
 		});
 	}
 	{
@@ -43,6 +43,7 @@ const sanitize_filename = require("sanitize-filename");
 	docs = await mathcha.get_documents(page);
 
 	for ({ element, title, parents } of docs) {
+		parents.reverse();
 		const target_path = [...parents, title].map(sanitize_filename);
 		const target_pdf = `./pdfs/${target_path.join("/")}.pdf`;
 		console.log(`Processing: ${target_pdf}`);
