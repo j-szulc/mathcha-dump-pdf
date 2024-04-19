@@ -14,6 +14,17 @@ const print = async (targetPage, pdf_options) => {
 	targetPage.emulateMediaType("screen");
 };
 
+const debug_await = (promise) => {
+	promise
+		.then((result) => {
+			console.log(result);
+		})
+		.catch((error) => {
+			console.error(error);
+		});
+	debugger;
+};
+
 module.exports = {
 	sleep,
 	print,

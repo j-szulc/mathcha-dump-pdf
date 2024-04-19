@@ -47,7 +47,7 @@ const esc = async (targetPage) => {
 	await targetPage.keyboard.press("Escape");
 };
 
-const process_current_document = async (targetPage) => {
+const process_current_document = async (targetPage, targetPdf) => {
 	await print_meta_p(targetPage);
 	await sleep();
 	await print_preview_button(targetPage);
@@ -55,7 +55,7 @@ const process_current_document = async (targetPage) => {
 	targetPage.waitForSelector("#print-container");
 	await sleep();
 	const pdf_options = {
-		path: "output.pdf",
+		path: targetPdf,
 		format: "A4",
 	};
 	await print(targetPage, pdf_options);
@@ -76,7 +76,30 @@ const get_documents = async (targetPage) => {
 		if (!isDraggable) {
 			continue;
 		}
-		result.push(element);
+		title = await element.evaluate((el) => el.getAttribute("title"));
+		const parents = [];
+		for (
+			let parent = element;
+			parent;
+			parent = await parent.getProperty("parentNode")
+		) {
+			const tagName = await parent.evaluate((el) => el.tagName);
+			// console.log(tagName);
+			if ([null, undefined, "BODY", "HEAD", "HTML"].includes(tagName)) {
+				break;
+			}
+			if (tagName === "NODE-DIRECTORY") {
+				const parentName = await parent.evaluate((el) =>
+					el.querySelector("node-directory-name").getAttribute("title"),
+				);
+				parents.push(parentName);
+			}
+		}
+		result.push({
+			element,
+			title,
+			parents,
+		});
 	}
 	return result;
 };

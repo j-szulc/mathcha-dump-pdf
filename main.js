@@ -10,7 +10,7 @@ const reader = require("readline-sync");
 		executablePath:
 			"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
 		args: ["--kiosk-printing"],
-		// devtools: true,
+		devtools: true,
 		userDataDir: "./user_data",
 	});
 	const page = await browser.newPage();
@@ -38,14 +38,14 @@ const reader = require("readline-sync");
 	reader.question(`Please:
 	1. Login to your Mathcha account
 	2. Expand all documents
-	3. Press any key to continue or Ctrl+C to exit.
-	`);
+	3. Press any key to continue or Ctrl+C to exit.\n`);
 	docs = await mathcha.get_documents(page);
 
-	for (element of docs) {
+	for ({ element, title, parents } of docs) {
+		console.log(parents.join(" > "), title);
 		await element.click();
 		await sleep();
-		await mathcha.process_current_document(page);
+		await mathcha.process_current_document(page, "output.pdf");
 		await sleep();
 	}
 
