@@ -514,3 +514,4 @@ pip-selfcheck.json
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,jetbrains+all,dotenv,venv,node,python,rust,c++,visualstudiocode
 user_data
+pdfs
