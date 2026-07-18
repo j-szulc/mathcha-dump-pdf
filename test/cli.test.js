@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { parseArgs } = require("../bin/mathcha-dump-pdf");
+const { cloneBrowserProfile } = require("../src/browser");
 const {
 	browserPathFile,
 	loadBrowserPath,
@@ -135,4 +136,20 @@ test("missing browser configuration instructs the user to run login", (context) 
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-browser-missing-"));
 	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
 	assert.throws(() => loadBrowserPath(directory), /mathcha-dump-pdf login/);
+});
+
+test("automation profile clones retain state without active-browser lock files", (context) => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-browser-profile-"));
+	fs.mkdirSync(path.join(directory, "Default"));
+	fs.writeFileSync(path.join(directory, "Default", "Cookies"), "session state");
+	fs.writeFileSync(path.join(directory, "SingletonLock"), "active browser");
+	fs.writeFileSync(path.join(directory, "DevToolsActivePort"), "9222");
+	const clone = cloneBrowserProfile(directory);
+	context.after(() => {
+		fs.rmSync(directory, { recursive: true, force: true });
+		fs.rmSync(clone, { recursive: true, force: true });
+	});
+	assert.equal(fs.readFileSync(path.join(clone, "Default", "Cookies"), "utf8"), "session state");
+	assert.equal(fs.existsSync(path.join(clone, "SingletonLock")), false);
+	assert.equal(fs.existsSync(path.join(clone, "DevToolsActivePort")), false);
 });

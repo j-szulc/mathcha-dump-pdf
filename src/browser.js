@@ -1,6 +1,7 @@
 "use strict";
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const puppeteer = require("puppeteer-core");
 const { loadBrowserPath } = require("./browser-config");
@@ -34,18 +35,43 @@ async function captureFailure(page) {
 	}
 }
 
+function cloneBrowserProfile(userDataDir) {
+	const cloneDir = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-browser-profile-"));
+	try {
+		fs.cpSync(userDataDir, cloneDir, {
+			recursive: true,
+			filter(source) {
+				const name = path.basename(source);
+				return !name.startsWith("Singleton") && name !== "DevToolsActivePort";
+			},
+		});
+		return cloneDir;
+	} catch (error) {
+		fs.rmSync(cloneDir, { recursive: true, force: true });
+		throw error;
+	}
+}
+
 async function withMathchaBrowser(options, work) {
 	const executablePath = options.browserPath || loadBrowserPath(options.userDataDir);
 	fs.mkdirSync(options.userDataDir, { recursive: true });
+	const automationProfileDir = cloneBrowserProfile(options.userDataDir);
+	logger.debug(`Using isolated browser profile clone ${automationProfileDir}`);
 
 	const launchStartedAt = Date.now();
 	logger.step(`Launching browser from ${executablePath}`);
-	const browser = await puppeteer.launch({
-		headless: options.headless,
-		executablePath,
-		userDataDir: options.userDataDir,
-		args: ["--no-first-run", "--disable-features=Translate", "--kiosk-printing"],
-	});
+	let browser;
+	try {
+		browser = await puppeteer.launch({
+			headless: options.headless,
+			executablePath,
+			userDataDir: automationProfileDir,
+			args: ["--no-first-run", "--disable-features=Translate", "--kiosk-printing"],
+		});
+	} catch (error) {
+		fs.rmSync(automationProfileDir, { recursive: true, force: true });
+		throw error;
+	}
 	logger.info(
 		`Browser launched (pid=${browser.process()?.pid || "unknown"}) in ${formatDuration(Date.now() - launchStartedAt)}`,
 	);
@@ -87,7 +113,9 @@ async function withMathchaBrowser(options, work) {
 		} else {
 			logger.warn("Browser was already closed when cleanup began");
 		}
+		fs.rmSync(automationProfileDir, { recursive: true, force: true });
+		logger.debug("Removed isolated browser profile clone");
 	}
 }
 
-module.exports = { withMathchaBrowser };
+module.exports = { cloneBrowserProfile, withMathchaBrowser };
