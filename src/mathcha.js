@@ -3,11 +3,12 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawn } = require("node:child_process");
 const { chooseBrowser, storeBrowserPath } = require("./browser-config");
 const { withMathchaBrowser } = require("./browser");
+const { editorUrl } = require("./config");
 const { formatBytes, formatDuration, logger } = require("./logger");
 const {
-	askToContinue,
 	assertFile,
 	delay,
 	safePathSegment,
@@ -1186,41 +1187,22 @@ async function exportAsMathchaDir(options) {
 async function loginMathcha(options) {
 	const browserPath = await chooseBrowser(options.browser);
 	logger.info(`Selected browser: ${browserPath}`);
-	return withMathchaBrowser(
-		{ ...options, browserPath, headless: false, loginMode: true },
-		async (page, browser) => {
-			logger.info("Complete Mathcha login in the browser window");
-			const promptAbort = new AbortController();
-			const abortPrompt = () => promptAbort.abort();
-			browser.once("disconnected", abortPrompt);
-			page.once("close", abortPrompt);
-			try {
-				await askToContinue(
-					"When Mathcha is logged in, press Enter here to verify and save: ",
-					{ signal: promptAbort.signal },
-				);
-			} catch (error) {
-				if (promptAbort.signal.aborted) {
-					throw new Error("The browser window or tab was closed before login could be verified");
-				}
-				throw error;
-			} finally {
-				browser.off("disconnected", abortPrompt);
-				page.off("close", abortPrompt);
-			}
-			if (page.isClosed()) {
-				throw new Error("The browser window was closed before login could be verified");
-			}
-			await page.waitForSelector("document-sidebar document-tree");
-			await page.waitForSelector("login-name");
-			await waitForTreeSettled(page);
-			const loginName = await assertLoggedIn(page);
-			const configPath = storeBrowserPath(options.userDataDir, browserPath);
-			logger.info(`Verified Mathcha login as ${loginName}`);
-			logger.info(`Saved browser path to ${configPath}`);
-			return { browserPath, configPath, loginName };
-		},
+	fs.mkdirSync(options.userDataDir, { recursive: true });
+	const configPath = storeBrowserPath(options.userDataDir, browserPath);
+	logger.info(`Saved browser path to ${configPath}`);
+
+	const child = spawn(
+		browserPath,
+		[`--user-data-dir=${options.userDataDir}`, "--no-first-run", editorUrl],
+		{ detached: true, stdio: "ignore" },
 	);
+	await new Promise((resolve, reject) => {
+		child.once("spawn", resolve);
+		child.once("error", reject);
+	});
+	child.unref();
+	logger.info("Opened Mathcha in the browser; complete login there if needed");
+	return { browserPath, configPath };
 }
 
 async function printMathcha(options) {

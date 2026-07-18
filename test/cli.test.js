@@ -67,7 +67,7 @@ test("batch planning avoids Mathcha's direct-parent plus nested-document export 
 	);
 });
 
-test("login is the only headful command and accepts a browser override", () => {
+test("login accepts a browser override for its directly launched profile", () => {
 	const options = parseArgs(["login", "--browser", process.execPath]);
 	assert.equal(options.headless, false);
 	assert.equal(options.browser, process.execPath);

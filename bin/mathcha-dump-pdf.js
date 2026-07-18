@@ -13,7 +13,7 @@ function usage() {
   mathcha-dump-pdf print-mathcha <input.mathcha> [options]
 
 Commands:
-  login                  Interactively choose a browser and log in to Mathcha.
+  login                  Create the browser profile and open Mathcha for login.
   export-as-mathcha-dir  Put all root items in one directory and export it.
   print-mathcha          Import an archive and print every document to PDF.
 

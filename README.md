@@ -16,7 +16,7 @@ mise run install
 mise run run -- login
 ```
 
-`login` is the only interactive command. It detects commonly installed Chromium-based browsers, asks which one to use, opens it with `./user_data`, and waits for you to complete Mathcha login and press Enter. After verifying the session, it stores the selected executable path in `./user_data/browser-path`.
+`login` detects commonly installed Chromium-based browsers, asks which one to use, creates `./user_data`, stores the selected executable path in `./user_data/browser-path`, and opens Mathcha in that browser profile. The browser is launched directly, without Puppeteer or login automation, so sign-in methods such as Google login remain available. Complete login in the browser; the command does not inspect or verify the session.
 
 Skip browser selection by passing a detected name or executable path:
 

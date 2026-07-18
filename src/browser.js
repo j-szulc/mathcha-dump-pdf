@@ -66,10 +66,6 @@ async function withMathchaBrowser(options, work) {
 		logger.step(`Opening Mathcha editor: ${editorUrl}`);
 		await page.goto(editorUrl, { waitUntil: "domcontentloaded" });
 		logger.info(`Mathcha DOM loaded in ${formatDuration(Date.now() - navigationStartedAt)}`);
-		if (options.loginMode) {
-			logger.info("Mathcha is ready for interactive login");
-			return await work(page, browser);
-		}
 		logger.step("Waiting for the document sidebar and authenticated application shell");
 		await page.waitForSelector("document-sidebar document-tree");
 		logger.debug("Document tree element is present");
