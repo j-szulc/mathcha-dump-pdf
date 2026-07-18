@@ -8,6 +8,11 @@ const test = require("node:test");
 const { parseArgs } = require("../bin/mathcha-dump-pdf");
 const { cloneBrowserProfile, createOnlyBrowserPage } = require("../src/browser");
 const {
+	cookieFile,
+	loadMathchaCookies,
+	saveMathchaCookies,
+} = require("../src/browser-session");
+const {
 	browserPathFile,
 	loadBrowserPath,
 	resolveRequestedBrowser,
@@ -167,4 +172,22 @@ test("automation creates one fresh tab and closes all restored tabs", async () =
 	};
 	assert.equal(await createOnlyBrowserPage(browser), fresh);
 	assert.deepEqual(closed.sort(), ["first", "second"]);
+});
+
+test("login stores only Mathcha cookies with private permissions", (context) => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-cookie-session-"));
+	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	const session = { name: "JSESSIONID", value: "secret", domain: "www.mathcha.io", path: "/" };
+	const affinity = { name: "affinity", value: "route", domain: ".mathcha.io", path: "/" };
+	const unrelated = { name: "other", value: "ignore", domain: "example.com", path: "/" };
+	const saved = saveMathchaCookies(directory, [session, affinity, unrelated]);
+	assert.equal(saved.destination, cookieFile(directory));
+	assert.deepEqual(loadMathchaCookies(directory), [session, affinity]);
+	assert.equal(fs.statSync(saved.destination).mode & 0o777, 0o600);
+});
+
+test("missing extracted cookies instruct the user to login", (context) => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-cookie-missing-"));
+	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	assert.throws(() => loadMathchaCookies(directory), /mathcha-dump-pdf login/);
 });

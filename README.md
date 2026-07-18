@@ -16,7 +16,7 @@ mise run install
 mise run run -- login
 ```
 
-`login` detects commonly installed Chromium-based browsers, asks which one to use, creates `./user_data`, stores the selected executable path in `./user_data/browser-path`, and opens Mathcha in that browser profile. The browser is launched directly, without Puppeteer or login automation, so sign-in methods such as Google login remain available. Complete login in the browser; the command does not inspect or verify the session.
+`login` detects commonly installed Chromium-based browsers, asks which one to use, creates `./user_data`, stores the selected executable path in `./user_data/browser-path`, and opens Mathcha directly so sign-in methods such as Google login remain available. Complete login, then return to the terminal and press Enter. The command extracts only Mathcha cookies through the browser's local debugging endpoint and saves them to `./user_data/mathcha-cookies.json` with mode `0600`.
 
 Skip browser selection by passing a detected name or executable path:
 
@@ -25,7 +25,7 @@ mise run run -- login --browser brave
 mise run run -- login --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
-All other commands read `user_data/browser-path`, run headlessly by default, and never prompt. Pass `--kiosk` to show their browser actions in a visible window. Each automation run uses a temporary clone of `user_data`, closes any tabs restored into that clone, and performs its work in one fresh tab. Closing the automation browser therefore does not discard Mathcha's session cookie from the login profile. If the file is missing, its browser no longer exists, or the Mathcha session has expired, they stop and instruct you to run `login` again.
+All other commands read `user_data/browser-path` and `user_data/mathcha-cookies.json`, run headlessly by default, and never prompt. Pass `--kiosk` to show their browser actions in a visible window. Each automation run uses a temporary clone of `user_data`, closes any tabs restored into that clone, performs its work in one fresh tab, and injects the saved Mathcha cookies before navigation. Closing the automation browser therefore does not discard the login browser's session. If the saved browser is missing or the extracted Mathcha session has expired, rerun `login`.
 
 ## Export the account as one directory
 

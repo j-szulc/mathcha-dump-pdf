@@ -4,11 +4,18 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const puppeteer = require("puppeteer-core");
 const { chooseBrowser, storeBrowserPath } = require("./browser-config");
 const { withMathchaBrowser } = require("./browser");
+const {
+	devtoolsFile,
+	saveMathchaCookies,
+	waitForDevtoolsBrowserUrl,
+} = require("./browser-session");
 const { editorUrl } = require("./config");
 const { formatBytes, formatDuration, logger } = require("./logger");
 const {
+	askToContinue,
 	assertFile,
 	delay,
 	safePathSegment,
@@ -1190,10 +1197,17 @@ async function loginMathcha(options) {
 	fs.mkdirSync(options.userDataDir, { recursive: true });
 	const configPath = storeBrowserPath(options.userDataDir, browserPath);
 	logger.info(`Saved browser path to ${configPath}`);
+	fs.rmSync(devtoolsFile(options.userDataDir), { force: true });
 
 	const child = spawn(
 		browserPath,
-		[`--user-data-dir=${options.userDataDir}`, "--no-first-run", editorUrl],
+		[
+			`--user-data-dir=${options.userDataDir}`,
+			"--remote-debugging-address=127.0.0.1",
+			"--remote-debugging-port=0",
+			"--no-first-run",
+			editorUrl,
+		],
 		{ detached: true, stdio: "ignore" },
 	);
 	await new Promise((resolve, reject) => {
@@ -1201,8 +1215,18 @@ async function loginMathcha(options) {
 		child.once("error", reject);
 	});
 	child.unref();
+	const browserURL = await waitForDevtoolsBrowserUrl(options.userDataDir, options.timeout);
 	logger.info("Opened Mathcha in the browser; complete login there if needed");
-	return { browserPath, configPath };
+	await askToContinue("When Mathcha is logged in, press Enter here to save the session: ");
+	const browser = await puppeteer.connect({ browserURL });
+	try {
+		const cookies = await browser.cookies();
+		const saved = saveMathchaCookies(options.userDataDir, cookies);
+		logger.info(`Saved ${saved.count} Mathcha session cookies to ${saved.destination}`);
+		return { browserPath, configPath, cookiePath: saved.destination };
+	} finally {
+		await browser.disconnect();
+	}
 }
 
 async function printMathcha(options) {

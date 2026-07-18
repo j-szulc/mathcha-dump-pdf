@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const puppeteer = require("puppeteer-core");
 const { loadBrowserPath } = require("./browser-config");
+const { loadMathchaCookies } = require("./browser-session");
 const { debugDir, editorUrl, viewport } = require("./config");
 const { formatDuration, logger } = require("./logger");
 
@@ -92,6 +93,8 @@ async function withMathchaBrowser(options, work) {
 		page.setDefaultTimeout(options.timeout);
 		page.setDefaultNavigationTimeout(options.timeout);
 		await page.setViewport(viewport);
+		await page.setCookie(...loadMathchaCookies(options.userDataDir));
+		logger.debug("Injected saved Mathcha cookies into the isolated browser profile");
 		if (options.debug) {
 			page.on("console", (message) =>
 				logger.debug(`[browser:${message.type()}] ${message.text()}`),
