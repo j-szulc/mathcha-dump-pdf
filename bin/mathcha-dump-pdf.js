@@ -21,6 +21,7 @@ Options:
   --user-data-dir PATH   Browser profile directory (default: ./user_data).
   --timeout MS           UI timeout in milliseconds.
   --debug                Print browser console messages.
+  --kiosk                Show browser actions instead of running headlessly.
 
 login options:
   --browser PATH_OR_NAME Use this Chromium browser without asking which one.
@@ -29,6 +30,7 @@ export-as-mathcha-dir options:
   --import-instead       Import the bundled test fixture and re-export its root directory.
   --test-data PATH       Archive used by --import-instead.
   --name NAME            Name for the newly-created root directory.
+  --batch-size N         Export documents in numbered batches of at most N.
 
 print-mathcha options:
   --output-dir PATH      PDF destination (default: ./pdfs).
@@ -57,6 +59,7 @@ function parseArgs(argv) {
 		userDataDir: path.resolve("user_data"),
 		timeout: 120_000,
 		debug: false,
+		kiosk: false,
 		importInstead: false,
 		testData: path.resolve(__dirname, "../test/fixtures/testdata.mathcha"),
 		outputDir: path.resolve("pdfs"),
@@ -65,6 +68,10 @@ function parseArgs(argv) {
 	for (let index = 1; index < argv.length; index += 1) {
 		const arg = argv[index];
 		switch (arg) {
+			case "--kiosk":
+				options.kiosk = true;
+				options.headless = false;
+				break;
 			case "--debug":
 				options.debug = true;
 				break;
@@ -93,6 +100,13 @@ function parseArgs(argv) {
 			case "--name":
 				options.name = takeValue(argv, index, arg);
 				index += 1;
+				break;
+			case "--batch-size":
+				options.batchSize = Number(takeValue(argv, index, arg));
+				index += 1;
+				if (!Number.isInteger(options.batchSize) || options.batchSize <= 0) {
+					throw new Error("--batch-size must be a positive integer");
+				}
 				break;
 			case "--output-dir":
 				options.outputDir = path.resolve(takeValue(argv, index, arg));

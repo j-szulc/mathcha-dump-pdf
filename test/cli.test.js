@@ -13,12 +13,25 @@ const {
 	storeBrowserPath,
 } = require("../src/browser-config");
 const { formatBytes, formatDuration, percentage } = require("../src/logger");
+const { buildDocumentBatches } = require("../src/mathcha");
 const { safePathSegment } = require("../src/utils");
 
-test("export command is always noninteractive and headless", () => {
+test("export command is headless by default", () => {
 	const options = parseArgs(["export-as-mathcha-dir"]);
 	assert.equal(options.headless, true);
+	assert.equal(options.kiosk, false);
 	assert.equal(options.importInstead, false);
+});
+
+test("kiosk mode makes export and print browser actions visible", () => {
+	for (const args of [
+		["export-as-mathcha-dir", "--kiosk"],
+		["print-mathcha", "fixture.mathcha", "--kiosk"],
+	]) {
+		const options = parseArgs(args);
+		assert.equal(options.kiosk, true);
+		assert.equal(options.headless, false);
+	}
 });
 
 test("import-instead uses the bundled testdata.mathcha fixture", () => {
@@ -28,13 +41,39 @@ test("import-instead uses the bundled testdata.mathcha fixture", () => {
 	assert.equal(options.testData, path.resolve("test/fixtures/testdata.mathcha"));
 });
 
+test("export accepts a positive integer batch size", () => {
+	const options = parseArgs(["export-as-mathcha-dir", "--batch-size", "25"]);
+	assert.equal(options.batchSize, 25);
+	assert.throws(
+		() => parseArgs(["export-as-mathcha-dir", "--batch-size", "1.5"]),
+		/positive integer/,
+	);
+});
+
+test("batch planning avoids Mathcha's direct-parent plus nested-document export bug", () => {
+	const documents = [
+		{ title: "a", pathParts: ["dump", "baz", "a"] },
+		{ title: "b", pathParts: ["dump", "foo", "bar", "b"] },
+		{ title: "c", pathParts: ["dump", "foo", "c"] },
+		{ title: "d", pathParts: ["dump", "d"] },
+	];
+	assert.deepEqual(
+		buildDocumentBatches(documents, 2).map((batch) => batch.map((document) => document.title)),
+		[["a", "b"], ["c"], ["d"]],
+	);
+	assert.deepEqual(
+		buildDocumentBatches(documents, 3).map((batch) => batch.map((document) => document.title)),
+		[["a", "b", "c"], ["d"]],
+	);
+});
+
 test("login is the only headful command and accepts a browser override", () => {
 	const options = parseArgs(["login", "--browser", process.execPath]);
 	assert.equal(options.headless, false);
 	assert.equal(options.browser, process.execPath);
 });
 
-test("normal commands cannot be switched to interactive headful mode", () => {
+test("the unsupported headful alias remains unknown", () => {
 	assert.throws(
 		() => parseArgs(["export-as-mathcha-dir", "--headful"]),
 		/Unknown option: --headful/,

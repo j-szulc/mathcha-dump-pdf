@@ -162,8 +162,14 @@ async function listRootItems(page) {
 		if (!tree) return [];
 		const result = [];
 		for (const child of tree.children) {
-			if (child.matches("node-document")) {
-				result.push({ type: "document", title: child.getAttribute("title") || "Untitled" });
+			const documentNode = child.matches("node-document")
+				? child
+				: child.querySelector(":scope > node-document");
+			if (documentNode) {
+				result.push({
+					type: "document",
+					title: documentNode.getAttribute("title") || "Untitled",
+				});
 				continue;
 			}
 			const directoryName = child.querySelector(":scope > node-directory > node-directory-name");
@@ -185,10 +191,18 @@ async function rootNode(page, reference) {
 			if (!tree) return null;
 			const matches = [];
 			for (const child of tree.children) {
-				if (wanted.type === "document" && child.matches("node-document")) {
-					if ((child.getAttribute("title") || "Untitled") === wanted.title) matches.push(child);
-			}
-			if (wanted.type === "directory") {
+				if (wanted.type === "document") {
+					const documentNode = child.matches("node-document")
+						? child
+						: child.querySelector(":scope > node-document");
+					if (
+						documentNode &&
+						(documentNode.getAttribute("title") || "Untitled") === wanted.title
+					) {
+						matches.push(documentNode);
+					}
+				}
+				if (wanted.type === "directory") {
 					const name = child.querySelector(":scope > node-directory > node-directory-name");
 					if (name && (name.getAttribute("title") || "Untitled") === wanted.title) matches.push(name);
 				}
@@ -332,8 +346,12 @@ async function moveRootItem(page, item, target, countBefore) {
 			if (!tree) return false;
 			let count = 0;
 			for (const child of tree.children) {
-				if (child.matches("node-document")) count += 1;
-				else {
+				if (
+					child.matches("node-document") ||
+					child.querySelector(":scope > node-document")
+				) {
+					count += 1;
+				} else {
 					const name = child.querySelector(":scope > node-directory > node-directory-name");
 					if (name && name.getAttribute("title") !== targetTitle) count += 1;
 				}
@@ -427,6 +445,313 @@ async function saveRootAsArchive(page, reference, requestedOutput, timeout) {
 	return output;
 }
 
+function batchOutputPath(requestedOutput, batchNumber, batchCount) {
+	if (batchCount === 1) return requestedOutput;
+	const extension = path.extname(requestedOutput) || ".mathcha";
+	const base = path.basename(requestedOutput, path.extname(requestedOutput));
+	const width = Math.max(3, String(batchCount).length);
+	const part = String(batchNumber).padStart(width, "0");
+	const total = String(batchCount).padStart(width, "0");
+	return path.join(path.dirname(requestedOutput), `${base}.part-${part}-of-${total}${extension}`);
+}
+
+async function selectDocumentBatch(page, rootReference, documents) {
+	for (let offset = 0; offset < documents.length; offset += 1) {
+		const documentInfo = documents[offset];
+		const documentNode = await documentByIndex(page, rootReference, documentInfo.index);
+		await invokeReactHandler(
+			documentNode,
+			"onClick",
+			eventStub({ metaKey: offset > 0, ctrlKey: offset > 0 }),
+		);
+		await documentNode.dispose();
+		logger.progress(
+			`Batch selection: ${offset + 1}/${documents.length} — ${documentInfo.pathParts.join("/")}`,
+		);
+	}
+}
+
+async function openSelectedDocumentsExport(
+	page,
+	rootReference,
+	firstDocument,
+	expectedIds,
+	batchName,
+) {
+	const firstNode = await documentByIndex(page, rootReference, firstDocument.index);
+	try {
+		return await firstNode.evaluate(
+			(node, { expectedIds, batchName: requestedName }) => {
+				const internalKey = Object.keys(node).find((key) =>
+					key.startsWith("__reactInternalInstance"),
+				);
+				const queue = [node[internalKey]];
+				const seen = new Set();
+				let controller;
+				while (queue.length > 0 && seen.size < 1000) {
+					const current = queue.shift();
+					if (!current || typeof current !== "object" || seen.has(current)) continue;
+					seen.add(current);
+					const instance = current._instance;
+					if (
+						instance &&
+						Array.isArray(instance.state?.selectedNodes) &&
+						typeof instance.props?.onRequestSaveAsMathcha === "function"
+					) {
+						controller = instance;
+						break;
+					}
+					for (const related of [
+						current._hostParent,
+						current._currentElement?._owner,
+						current._renderedComponent,
+						current._parent,
+						current.return,
+					]) {
+						if (related) queue.push(related);
+					}
+					for (const child of Object.values(current._renderedChildren || {})) {
+						queue.push(child);
+					}
+				}
+				if (!controller) throw new Error("Mathcha document-tree controller was not found");
+				const selectedNodes = controller.state.selectedNodes;
+				const selectedIds = new Set(selectedNodes.map((selected) => selected.id));
+				if (
+					selectedNodes.length !== expectedIds.length ||
+					expectedIds.some((id) => !selectedIds.has(id))
+				) {
+					throw new Error(
+						`Mathcha selected ${selectedNodes.length} documents; expected ${expectedIds.length}`,
+					);
+				}
+				controller.props.onRequestSaveAsMathcha({
+					...selectedNodes[0],
+					nodeName: requestedName,
+				});
+				return selectedNodes;
+			},
+			{
+				expectedIds,
+				batchName,
+			},
+		);
+	} finally {
+		await firstNode.dispose();
+	}
+}
+
+async function installBatchRequestInterception(page, nodes) {
+	// Mathcha supports multi-selection in the tree but hides Save as .mathcha when
+	// more than one node is selected. Its export endpoint accepts the full node
+	// array, so keep Mathcha's dialog/downloader and replace only that request body.
+	let replaced = false;
+	let interceptionError;
+	let resolveReplacement;
+	let rejectReplacement;
+	const replacement = new Promise((resolve, reject) => {
+		resolveReplacement = resolve;
+		rejectReplacement = reject;
+	});
+	const handler = async (request) => {
+		try {
+			if (
+				!replaced &&
+				request.method() === "POST" &&
+				new URL(request.url()).pathname === "/api/export/zip2"
+			) {
+				replaced = true;
+				const body = JSON.parse(request.postData() || "{}");
+				body.nodes = nodes;
+				const headers = { ...request.headers() };
+				delete headers["content-length"];
+				await request.continue({ headers, postData: JSON.stringify(body) });
+				resolveReplacement();
+				return;
+			}
+			await request.continue();
+		} catch (error) {
+			interceptionError = error;
+			rejectReplacement(error);
+		}
+	};
+	await page.setRequestInterception(true);
+	page.on("request", handler);
+	return {
+		async waitForReplacement() {
+			await replacement;
+			if (interceptionError) throw interceptionError;
+		},
+		async stop() {
+			await page.setRequestInterception(false).catch(() => undefined);
+			page.off("request", handler);
+		},
+	};
+}
+
+async function closeExportDialog(page) {
+	const close = await elementByText(page, "modal-dialog button", "Close");
+	if (close) {
+		await invokeReactHandler(close, "onClick", eventStub());
+	} else {
+		await page.keyboard.press("Escape");
+	}
+	await page.waitForFunction(() => !document.querySelector("modal-dialog"));
+}
+
+async function assertExportedDocumentCount(page, expectedCount, batchNumber, batchCount) {
+	const entityCount = await page.evaluate(() => {
+		const text = [...document.querySelectorAll("modal-dialog .progressbar-text")]
+			.map((node) => (node.textContent || "").trim())
+			.find((value) => value.startsWith("Entity:"));
+		const match = text && text.match(/(\d+)\s*\/\s*(\d+)/);
+		return match ? Number(match[2]) : null;
+	});
+	if (entityCount !== expectedCount) {
+		throw new Error(
+			`Mathcha batch ${batchNumber}/${batchCount} selected ${expectedCount} documents but exported ${entityCount ?? "an unknown number"}`,
+		);
+	}
+}
+
+async function saveDocumentBatchAsArchive(
+	page,
+	rootReference,
+	documents,
+	requestedOutput,
+	timeout,
+	batchNumber,
+	batchCount,
+) {
+	const startedAt = Date.now();
+	const downloadDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-batch-export-"));
+	const nodes = documents.map((document) => ({
+		id: document.id,
+		type: 0,
+		nodeName: document.title,
+	}));
+	const batchName = `Batch ${batchNumber} of ${batchCount}`;
+	let interception;
+	try {
+		await configureDownloads(page, downloadDirectory);
+		const before = new Set(fs.readdirSync(downloadDirectory));
+		logger.step(
+			`Selecting ${documents.length} documents for batch ${batchNumber}/${batchCount}`,
+		);
+		await selectDocumentBatch(page, rootReference, documents);
+		interception = await installBatchRequestInterception(page, nodes);
+		await openSelectedDocumentsExport(
+			page,
+			rootReference,
+			documents[0],
+			documents.map((document) => document.id),
+			batchName,
+		);
+		await page.waitForFunction(() => {
+			const title = document.querySelector("modal-dialog header-title");
+			return title && (title.textContent || "").startsWith("Export ");
+		});
+		await interception.waitForReplacement();
+		logger.info(
+			`Mathcha export dialog opened with ${documents.length} selected document${documents.length === 1 ? "" : "s"}`,
+		);
+		const state = await withModalProgress(page, `Mathcha batch ${batchNumber}/${batchCount}`, () =>
+			page.waitForFunction(() => {
+				const modal = document.querySelector("modal-dialog");
+				const text = modal ? modal.textContent || "" : "";
+				if (text.includes("Export successfully!")) return "success";
+				if (text.includes("Export failed")) return "failed";
+				return false;
+			}),
+		);
+		if ((await state.jsonValue()) !== "success") {
+			throw new Error(`Mathcha reported that batch ${batchNumber}/${batchCount} failed`);
+		}
+		await assertExportedDocumentCount(page, documents.length, batchNumber, batchCount);
+		const downloaded = await waitForStableFile(downloadDirectory, before, timeout);
+		const output = uniqueFilePath(requestedOutput);
+		moveDownloadedFile(downloaded, output);
+		await closeExportDialog(page);
+		logger.info(
+			`Batch ${batchNumber}/${batchCount} saved to ${output} (${formatBytes(fs.statSync(output).size)}) in ${formatDuration(Date.now() - startedAt)}`,
+		);
+		return output;
+	} finally {
+		if (interception) await interception.stop();
+		fs.rmSync(downloadDirectory, { recursive: true, force: true });
+	}
+}
+
+function canExportTogether(documents) {
+	if (documents.length <= 1) return true;
+	const parents = documents.map((document) => document.pathParts.slice(0, -1));
+	let commonDepth = 0;
+	while (
+		parents.every(
+			(parts) =>
+				parts.length > commonDepth && parts[commonDepth] === parents[0][commonDepth],
+		)
+	) {
+		commonDepth += 1;
+	}
+	const hasDocumentAtCommonParent = parents.some((parts) => parts.length === commonDepth);
+	const hasDocumentBelowCommonParent = parents.some((parts) => parts.length > commonDepth);
+	return !(hasDocumentAtCommonParent && hasDocumentBelowCommonParent);
+}
+
+function buildDocumentBatches(documents, batchSize) {
+	const batches = [];
+	let current = [];
+	for (const document of documents) {
+		const candidate = [...current, document];
+		if (current.length >= batchSize || !canExportTogether(candidate)) {
+			batches.push(current);
+			current = [document];
+		} else {
+			current = candidate;
+		}
+	}
+	if (current.length > 0) batches.push(current);
+	return batches;
+}
+
+async function saveDocumentsInBatches(page, rootReference, requestedOutput, options) {
+	await expandAllDirectories(page, rootReference);
+	const documents = (await listDocuments(page, rootReference)).map((document, index) => ({
+		...document,
+		index,
+	}));
+	if (documents.length === 0) {
+		throw new Error(`The export directory contains no documents: ${rootReference.title}`);
+	}
+	const batches = buildDocumentBatches(documents, options.batchSize);
+	logger.info(
+		`Batch export plan: ${documents.length} documents in ${batches.length} batch${batches.length === 1 ? "" : "es"} of at most ${options.batchSize}`,
+	);
+	if (batches.length > Math.ceil(documents.length / options.batchSize)) {
+		logger.info(
+			"Mathcha-safe partitioning separated documents located directly beside nested directories",
+		);
+	}
+	const outputs = [];
+	for (let index = 0; index < batches.length; index += 1) {
+		const output = batchOutputPath(requestedOutput, index + 1, batches.length);
+		outputs.push(
+			await saveDocumentBatchAsArchive(
+				page,
+				rootReference,
+				batches[index],
+				output,
+				options.timeout,
+				index + 1,
+				batches.length,
+			),
+		);
+	}
+	logger.info(`Saved ${outputs.length} batch archive${outputs.length === 1 ? "" : "s"}`);
+	return outputs;
+}
+
 async function importArchive(page, archivePath) {
 	assertFile(archivePath, ".mathcha");
 	const startedAt = Date.now();
@@ -466,30 +791,51 @@ async function importArchive(page, archivePath) {
 	if (value.state !== "success") {
 		throw new Error(`Mathcha import failed: ${value.text.trim()}`);
 	}
-	const match = value.text.match(/New Folder\s+"([^"]+)"\s+added/);
-	if (!match) throw new Error("Could not read the imported directory name from Mathcha");
-	const title = match[1];
-	const occurrence = before.filter(
-		(item) => item.type === "directory" && item.title === title,
-	).length;
 	await clickModalButton(page, "Close");
 	await page.waitForFunction(() => !document.querySelector("modal-dialog"));
 	await page.waitForFunction(
-		({ selector, title, occurrence }) => {
+		({ selector, previousCount }) => {
 			const tree = document.querySelector(selector);
 			if (!tree) return false;
-			const matches = [...tree.children]
-				.map((child) => child.querySelector(":scope > node-directory > node-directory-name"))
-				.filter((node) => node && node.getAttribute("title") === title);
-			return matches.length > occurrence;
+			let count = 0;
+			for (const child of tree.children) {
+				if (
+					child.matches("node-document") ||
+					child.querySelector(":scope > node-document") ||
+					child.querySelector(":scope > node-directory > node-directory-name")
+				) {
+					count += 1;
+				}
+			}
+			return count > previousCount;
 		},
 		{},
-		{ selector: MAIN_TREE_SELECTOR, title, occurrence },
+		{ selector: MAIN_TREE_SELECTOR, previousCount: before.length },
 	);
+	await waitForTreeSettled(page);
+	const after = await listRootItems(page);
+	const beforeCounts = new Map();
+	for (const item of before) {
+		const key = `${item.type}\u0000${item.title}`;
+		beforeCounts.set(key, (beforeCounts.get(key) || 0) + 1);
+	}
+	const seenAfter = new Map();
+	const references = [];
+	for (const item of after) {
+		const key = `${item.type}\u0000${item.title}`;
+		const occurrence = seenAfter.get(key) || 0;
+		seenAfter.set(key, occurrence + 1);
+		if (occurrence >= (beforeCounts.get(key) || 0)) {
+			references.push({ ...item, occurrence });
+		}
+	}
+	if (references.length === 0) {
+		throw new Error("Mathcha reported import success but no new root items appeared");
+	}
 	logger.info(
-		`Imported root directory: ${title} (${formatDuration(Date.now() - startedAt)})`,
+		`Imported ${references.length} root item${references.length === 1 ? "" : "s"}: ${references.map((reference) => `${reference.type} ${reference.title}`).join(", ")} (${formatDuration(Date.now() - startedAt)})`,
 	);
-	return { type: "directory", title, occurrence };
+	return references;
 }
 
 async function rootDirectoryContainer(page, reference) {
@@ -541,6 +887,17 @@ async function expandAllDirectories(page, rootReference) {
 async function listDocuments(page, rootReference) {
 	const root = await rootDirectoryContainer(page, rootReference);
 	const documents = await root.evaluate((container) => {
+		function reactDocument(node) {
+			const internalKey = Object.keys(node).find((key) =>
+				key.startsWith("__reactInternalInstance"),
+			);
+			let current = node[internalKey];
+			for (let depth = 0; current && depth < 30; depth += 1) {
+				if (current._instance?.props?.document) return current._instance.props.document;
+				current = current._currentElement?._owner || current._hostParent;
+			}
+			return null;
+		}
 		const result = [];
 		for (const documentNode of container.querySelectorAll("node-document")) {
 			const rect = documentNode.getBoundingClientRect();
@@ -556,7 +913,9 @@ async function listDocuments(page, rootReference) {
 				current = current.parentElement;
 			}
 			parents.reverse();
+			const document = reactDocument(documentNode);
 			result.push({
+				id: document?.id,
 				title: documentNode.getAttribute("title") || "Untitled",
 				pathParts: [...parents, documentNode.getAttribute("title") || "Untitled"],
 			});
@@ -564,6 +923,9 @@ async function listDocuments(page, rootReference) {
 		return result;
 	});
 	await root.dispose();
+	if (documents.some((document) => !document.id)) {
+		throw new Error("Could not read one or more Mathcha document IDs from the expanded tree");
+	}
 	return documents;
 }
 
@@ -796,7 +1158,13 @@ async function exportAsMathchaDir(options) {
 
 		let rootReference;
 		if (options.importInstead) {
-			rootReference = await importArchive(page, options.testData);
+			const imported = await importArchive(page, options.testData);
+			if (imported.length !== 1 || imported[0].type !== "directory") {
+				throw new Error(
+					"--import-instead requires an archive containing exactly one root directory",
+				);
+			}
+			[rootReference] = imported;
 		} else {
 			logger.step("Opening the sidebar three-dot menu and selecting Collapse All");
 			await collapseAll(page);
@@ -807,12 +1175,10 @@ async function exportAsMathchaDir(options) {
 			await gatherIntoDirectory(page, rootReference);
 		}
 
-		const output = await saveRootAsArchive(
-			page,
-			rootReference,
-			options.outputPath,
-			options.timeout,
-		);
+		if (options.batchSize) {
+			return saveDocumentsInBatches(page, rootReference, options.outputPath, options);
+		}
+		const output = await saveRootAsArchive(page, rootReference, options.outputPath, options.timeout);
 		logger.info(`Saved .mathcha archive: ${output}`);
 		return output;
 	});
@@ -863,11 +1229,25 @@ async function printMathcha(options) {
 	return withMathchaBrowser(options, async (page) => {
 		const loginName = await assertLoggedIn(page);
 		logger.info(`Logged in to Mathcha as ${loginName}`);
-		const rootReference = await importArchive(page, options.inputPath);
-		await expandAllDirectories(page, rootReference);
-		const documents = await listDocuments(page, rootReference);
+		const rootReferences = await importArchive(page, options.inputPath);
+		const documents = [];
+		for (const rootReference of rootReferences) {
+			if (rootReference.type === "document") {
+				documents.push({
+					rootReference,
+					title: rootReference.title,
+					pathParts: [rootReference.title],
+				});
+				continue;
+			}
+			await expandAllDirectories(page, rootReference);
+			const nested = await listDocuments(page, rootReference);
+			documents.push(
+				...nested.map((document, index) => ({ ...document, index, rootReference })),
+			);
+		}
 		if (documents.length === 0) {
-			throw new Error(`The imported directory contains no documents: ${rootReference.title}`);
+			throw new Error("The imported archive contains no documents");
 		}
 		logger.info(`Found ${documents.length} document${documents.length === 1 ? "" : "s"} to print`);
 		const outputs = [];
@@ -877,7 +1257,14 @@ async function printMathcha(options) {
 			logger.progress(
 				`Documents: ${index + 1}/${documents.length} (${percentage(index + 1, documents.length)}) — ${documentLabel}`,
 			);
-			const documentNode = await documentByIndex(page, rootReference, index);
+			const documentNode =
+				documentInfo.rootReference.type === "document"
+					? await rootNode(page, documentInfo.rootReference)
+					: await documentByIndex(
+							page,
+							documentInfo.rootReference,
+							documentInfo.index,
+						);
 			const loadStartedAt = Date.now();
 			logger.step(`Opening document: ${documentLabel}`);
 			const loadedResponse = page.waitForResponse((response) => {
@@ -923,6 +1310,7 @@ async function printMathcha(options) {
 }
 
 module.exports = {
+	buildDocumentBatches,
 	exportAsMathchaDir,
 	loginMathcha,
 	printMathcha,
