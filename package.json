@@ -1,10 +1,19 @@
 {
-	"dependencies": {
-		"puppeteer": "^22.6.5",
-		"readline-sync": "^1.4.10",
-		"sanitize-filename": "^1.6.3"
+	"name": "mathcha-dump-pdf",
+	"version": "2.0.0",
+	"description": "Export a Mathcha account as one .mathcha archive and print .mathcha directory trees to PDF",
+	"private": true,
+	"bin": {
+		"mathcha-dump-pdf": "./bin/mathcha-dump-pdf.js"
 	},
 	"scripts": {
-		"start": "node main.js"
+		"start": "node bin/mathcha-dump-pdf.js",
+		"test": "node --test"
+	},
+	"engines": {
+		"node": ">=22.12"
+	},
+	"dependencies": {
+		"puppeteer-core": "^25.3.0"
 	}
 }
