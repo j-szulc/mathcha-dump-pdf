@@ -6,13 +6,17 @@ description = "Install project dependencies"
 env = { PUPPETEER_SKIP_DOWNLOAD = "true" }
 run = "bun install"
 
-[tasks.run]
-description = "Run the Mathcha CLI"
-run = "bun run start --"
+[tasks.login]
+description = "Run the login command"
+run = "bun run start -- login"
 
-[tasks.default]
-description = "Install dependencies and run the Mathcha CLI"
-run = "mise run install && mise run run --"
+[tasks.export-as-mathcha-dir]
+description = "Export as mathcha dir"
+run = "bun run start -- export-as-mathcha-dir"
+
+[tasks.print-mathcha]
+description = "Print mathcha"
+run = "bun run start -- print-mathcha"
 
 [tasks.test]
 description = "Run tests"
