@@ -12,7 +12,7 @@ const {
 	resolveRequestedBrowser,
 	storeBrowserPath,
 } = require("../src/browser-config");
-const { formatBytes, formatDuration, formatLogLine, percentage } = require("../src/logger");
+const { formatBytes, formatDuration, formatLogLine, logger, percentage } = require("../src/logger");
 const { buildDocumentBatches } = require("../src/mathcha");
 const { safePathSegment } = require("../src/utils");
 
@@ -101,6 +101,24 @@ test("log lines color severity and timing metadata when colors are enabled", () 
 	assert.match(line, /\u001b\[/);
 	assert.match(line, /\[WARN\].*Careful/);
 	assert.doesNotMatch(formatLogLine("WARN", "Careful", { color: false }), /\u001b\[/);
+});
+
+test("determinate progress uses progress bars", () => {
+	let output = "";
+	const stream = {
+		clearLine() {},
+		columns: 100,
+		cursorTo() {},
+		isTTY: true,
+		write(chunk) {
+			output += chunk;
+		},
+	};
+	const progressBar = logger.progressBar("Documents", 2, { renderThrottle: 0, stream });
+	progressBar.tick("First");
+	progressBar.tick("Second");
+	assert.match(output, /Documents \[/);
+	assert.match(output, /2\/2 \(100%\) Second/);
 });
 
 test("browser path is stored inside user_data and loaded for later commands", (context) => {

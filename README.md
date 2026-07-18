@@ -78,12 +78,12 @@ PDFs reproduce the imported directory structure below the output directory. Exis
 
 ## Terminal progress logging
 
-All commands continuously report their work with a color-coded severity, ISO timestamp, and elapsed command time. Color is enabled when the output terminal supports it and respects the standard `NO_COLOR` environment variable. The log covers browser startup and shutdown, Mathcha readiness and login, import/export dialog progress, directory moves and expansion, archive/PDF write sizes, per-document counts and percentages, print-preview layout, and stage durations. For example:
+All commands continuously report their work with a color-coded severity, ISO timestamp, and elapsed command time. Color is enabled when the output terminal supports it and respects the standard `NO_COLOR` environment variable. Determinate operations use terminal progress bars; redirected output falls back to one progress log line per update. The log covers browser startup and shutdown, Mathcha readiness and login, import/export dialog progress, directory moves and expansion, archive/PDF write sizes, per-document counts and percentages, print-preview layout, and stage durations. For example:
 
 ```text
 [2026-07-18T12:34:56.789Z] [STEP] [+2.1s] Mathcha import started
 [2026-07-18T12:34:57.012Z] [PROGRESS] [+2.3s] Mathcha import: Entity: 3/8 | Resources: 1/4
-[2026-07-18T12:35:01.456Z] [PROGRESS] [+6.7s] Documents: 2/4 (50%) — dump/Algebra/Quadratics
+Documents [████████████░░░░░░░░░░░░] 2/4 (50%) dump/Algebra/Quadratics
 ```
 
 Run a command with `--debug` to include Mathcha's browser console, page errors, API response details, and lower-level UI milestones. On failure, the terminal identifies the failed browser stage and the last visible page is saved to `./debug/last-error.png` and `./debug/last-error.html`. If the browser window or tab closed first, the CLI reports that explicitly.

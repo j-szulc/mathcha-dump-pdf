@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { chooseBrowser, storeBrowserPath } = require("./browser-config");
 const { withMathchaBrowser } = require("./browser");
-const { formatBytes, formatDuration, logger, percentage } = require("./logger");
+const { formatBytes, formatDuration, logger } = require("./logger");
 const {
 	askToContinue,
 	assertFile,
@@ -373,6 +373,7 @@ async function gatherIntoDirectory(page, target) {
 	);
 	const total = remaining.length;
 	logger.info(`Found ${total} root item${total === 1 ? "" : "s"} to move into ${target.title}`);
+	const progressBar = total > 0 ? logger.progressBar("Root moves", total) : null;
 	while (remaining.length > 0) {
 		const item = remaining[0];
 		const itemStartedAt = Date.now();
@@ -381,9 +382,8 @@ async function gatherIntoDirectory(page, target) {
 		remaining = (await listRootItems(page)).filter(
 			(entry) => !(entry.type === "directory" && entry.title === target.title),
 		);
-		const completed = total - remaining.length;
-		logger.progress(
-			`Root moves: ${completed}/${total} (${percentage(completed, total)}) — ${item.title} completed in ${formatDuration(Date.now() - itemStartedAt)}`,
+		progressBar.tick(
+			`${item.title} completed in ${formatDuration(Date.now() - itemStartedAt)}`,
 		);
 	}
 }
@@ -456,6 +456,7 @@ function batchOutputPath(requestedOutput, batchNumber, batchCount) {
 }
 
 async function selectDocumentBatch(page, rootReference, documents) {
+	const progressBar = logger.progressBar("Batch selection", documents.length);
 	for (let offset = 0; offset < documents.length; offset += 1) {
 		const documentInfo = documents[offset];
 		const documentNode = await documentByIndex(page, rootReference, documentInfo.index);
@@ -465,9 +466,7 @@ async function selectDocumentBatch(page, rootReference, documents) {
 			eventStub({ metaKey: offset > 0, ctrlKey: offset > 0 }),
 		);
 		await documentNode.dispose();
-		logger.progress(
-			`Batch selection: ${offset + 1}/${documents.length} — ${documentInfo.pathParts.join("/")}`,
-		);
+		progressBar.tick(documentInfo.pathParts.join("/"));
 	}
 }
 
@@ -1251,12 +1250,10 @@ async function printMathcha(options) {
 		}
 		logger.info(`Found ${documents.length} document${documents.length === 1 ? "" : "s"} to print`);
 		const outputs = [];
+		const progressBar = logger.progressBar("Documents", documents.length);
 		for (let index = 0; index < documents.length; index += 1) {
 			const documentInfo = documents[index];
 			const documentLabel = documentInfo.pathParts.join("/");
-			logger.progress(
-				`Documents: ${index + 1}/${documents.length} (${percentage(index + 1, documents.length)}) — ${documentLabel}`,
-			);
 			const documentNode =
 				documentInfo.rootReference.type === "document"
 					? await rootNode(page, documentInfo.rootReference)
@@ -1303,6 +1300,7 @@ async function printMathcha(options) {
 			await printCurrentDocument(page, output);
 			outputs.push(output);
 			logger.info(`Saved PDF: ${output}`);
+			progressBar.tick(documentLabel);
 		}
 		logger.info(`Printed ${outputs.length}/${documents.length} documents successfully`);
 		return outputs;

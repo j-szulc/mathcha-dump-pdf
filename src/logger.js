@@ -1,9 +1,11 @@
 "use strict";
 
 const pc = require("picocolors");
+const ProgressBar = require("progress");
 
 const processStartedAt = process.hrtime.bigint();
 let debugEnabled = false;
+let activeProgressBar;
 
 function elapsedSeconds() {
 	return Number(process.hrtime.bigint() - processStartedAt) / 1_000_000_000;
@@ -30,7 +32,40 @@ function formatLogLine(level, message, { color = pc.isColorSupported } = {}) {
 function write(level, message) {
 	const line = formatLogLine(level, message);
 	const stream = level === "ERROR" || level === "WARN" ? process.stderr : process.stdout;
+	if (activeProgressBar && !activeProgressBar.complete && activeProgressBar.stream.isTTY) {
+		activeProgressBar.interrupt(line);
+		return;
+	}
 	stream.write(`${line}\n`);
+}
+
+function createProgressBar(label, total, options = {}) {
+	if (!Number.isInteger(total) || total <= 0) {
+		throw new TypeError("Progress bar total must be a positive integer");
+	}
+	const stream = options.stream || process.stderr;
+	const bar = new ProgressBar(`${label} [:bar] :current/:total (:percent) :detail`, {
+		complete: "█",
+		head: "█",
+		incomplete: "░",
+		renderThrottle: options.renderThrottle,
+		stream,
+		total,
+		width: 24,
+	});
+	activeProgressBar = bar;
+	return {
+		tick(detail = "") {
+			if (bar.complete) return;
+			if (stream.isTTY) bar.tick({ detail });
+			else {
+				bar.curr += 1;
+				write("PROGRESS", `${label}: ${bar.curr}/${total} (${percentage(bar.curr, total)}) — ${detail}`);
+				if (bar.curr >= total) bar.complete = true;
+			}
+			if (bar.complete && activeProgressBar === bar) activeProgressBar = undefined;
+		},
+	};
 }
 
 function formatBytes(bytes) {
@@ -71,6 +106,9 @@ const logger = {
 	},
 	progress(message) {
 		write("PROGRESS", message);
+	},
+	progressBar(label, total, options) {
+		return createProgressBar(label, total, options);
 	},
 	warn(message) {
 		write("WARN", message);
