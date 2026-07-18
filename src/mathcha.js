@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const puppeteer = require("puppeteer-core");
-const { chooseBrowser, storeBrowserPath } = require("./browser-config");
+const { chooseLoginBrowser, storeBrowserPath } = require("./browser-config");
 const { withMathchaBrowser } = require("./browser");
 const {
 	activeBrowserPid,
@@ -1194,7 +1194,7 @@ async function exportAsMathchaDir(options) {
 }
 
 async function loginMathcha(options) {
-	const browserPath = await chooseBrowser(options.browser);
+	const browserPath = await chooseLoginBrowser(options.userDataDir, options.browser);
 	logger.info(`Selected browser: ${browserPath}`);
 	fs.mkdirSync(options.userDataDir, { recursive: true });
 	const existingPid = activeBrowserPid(options.userDataDir);

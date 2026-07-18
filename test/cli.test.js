@@ -15,6 +15,7 @@ const {
 } = require("../src/browser-session");
 const {
 	browserPathFile,
+	chooseLoginBrowser,
 	loadBrowserPath,
 	resolveRequestedBrowser,
 	storeBrowserPath,
@@ -136,6 +137,13 @@ test("browser path is stored inside user_data and loaded for later commands", (c
 	assert.equal(fs.readFileSync(configPath, "utf8"), `${process.execPath}\n`);
 	assert.equal(loadBrowserPath(directory), process.execPath);
 	assert.equal(resolveRequestedBrowser(process.execPath), process.execPath);
+});
+
+test("login reuses browser-path when user_data already contains it", async (context) => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-browser-reuse-"));
+	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	storeBrowserPath(directory, process.execPath);
+	assert.equal(await chooseLoginBrowser(directory, "/not/a/browser"), process.execPath);
 });
 
 test("missing browser configuration instructs the user to run login", (context) => {

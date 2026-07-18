@@ -152,6 +152,17 @@ async function chooseBrowser(requested) {
 	}
 }
 
+async function chooseLoginBrowser(userDataDir, requested) {
+	const configPath = browserPathFile(userDataDir);
+	if (fs.existsSync(configPath)) {
+		const executablePath = loadBrowserPath(userDataDir);
+		logger.info(`Using browser saved in ${configPath}: ${executablePath}`);
+		logger.info(`To choose a different browser, delete ${userDataDir} and run login again`);
+		return executablePath;
+	}
+	return chooseBrowser(requested);
+}
+
 function storeBrowserPath(userDataDir, executablePath) {
 	const validated = resolveRequestedBrowser(executablePath);
 	fs.mkdirSync(userDataDir, { recursive: true });
@@ -180,6 +191,7 @@ function loadBrowserPath(userDataDir) {
 module.exports = {
 	browserPathFile,
 	chooseBrowser,
+	chooseLoginBrowser,
 	detectInstalledBrowsers,
 	loadBrowserPath,
 	resolveRequestedBrowser,
