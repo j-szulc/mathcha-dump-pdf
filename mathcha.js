@@ -2,20 +2,6 @@ const puppeteer = require("puppeteer"); // v20.7.4 or later
 const { print, sleep } = require("./utils");
 const { timeout } = require("./config");
 
-const disappear_quick_start = async (targetPage) => {
-	await puppeteer.Locator.race([
-		targetPage.locator(
-			"::-p-xpath(/html/body/div[1]/page/container-layer/quick-start/qs-footer/button)",
-		),
-	])
-		.setTimeout(timeout)
-		.click({
-			offset: {
-				x: 10,
-				y: 10,
-			},
-		});
-};
 
 const print_meta_p = async (targetPage) => {
 	await targetPage.keyboard.down("Meta");
@@ -101,7 +87,6 @@ const get_documents = async (targetPage) => {
 };
 
 module.exports = {
-	disappear_quick_start,
 	print_meta_p,
 	print_preview_button,
 	process_current_document,

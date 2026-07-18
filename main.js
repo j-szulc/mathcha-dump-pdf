@@ -35,6 +35,11 @@ const reader = require("readline-sync");
 		await Promise.all(promises);
 	}
 
+	
+	// await sleep(5000);
+	// console.log("Disappearing quick start...");
+	// await mathcha.disappear_quick_start(page);
+
 	reader.question(`Please:
 	1. Login to your Mathcha account
 	2. Expand all documents
