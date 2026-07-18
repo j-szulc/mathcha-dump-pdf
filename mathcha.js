@@ -54,9 +54,7 @@ const process_current_document = async (targetPage, targetPdf) => {
 	await sleep();
 	targetPage.waitForSelector("#print-container");
 	await sleep();
-	const pdfOptions = {
-		format: "A4",
-	};
+	const pdfOptions = {};
 	await print(targetPage, targetPdf, pdfOptions);
 	await esc(targetPage);
 	await sleep();
