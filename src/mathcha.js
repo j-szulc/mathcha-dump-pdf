@@ -1197,9 +1197,24 @@ async function loginMathcha(options) {
 	fs.mkdirSync(options.userDataDir, { recursive: true });
 	const configPath = storeBrowserPath(options.userDataDir, browserPath);
 	logger.info(`Saved browser path to ${configPath}`);
-	fs.rmSync(devtoolsFile(options.userDataDir), { force: true });
 
-	const child = spawn(
+	const loginBrowser = spawn(
+		browserPath,
+		[`--user-data-dir=${options.userDataDir}`, "--no-first-run", editorUrl],
+		{ detached: true, stdio: "ignore" },
+	);
+	await new Promise((resolve, reject) => {
+		loginBrowser.once("spawn", resolve);
+		loginBrowser.once("error", reject);
+	});
+	loginBrowser.unref();
+	logger.info("Opened Mathcha normally, without browser debugging enabled");
+	await askToContinue(
+		"Log in to Mathcha, close that browser window, then press Enter to extract the session: ",
+	);
+
+	fs.rmSync(devtoolsFile(options.userDataDir), { force: true });
+	const extractionBrowser = spawn(
 		browserPath,
 		[
 			`--user-data-dir=${options.userDataDir}`,
@@ -1211,18 +1226,17 @@ async function loginMathcha(options) {
 		{ detached: true, stdio: "ignore" },
 	);
 	await new Promise((resolve, reject) => {
-		child.once("spawn", resolve);
-		child.once("error", reject);
+		extractionBrowser.once("spawn", resolve);
+		extractionBrowser.once("error", reject);
 	});
-	child.unref();
+	extractionBrowser.unref();
 	const browserURL = await waitForDevtoolsBrowserUrl(options.userDataDir, options.timeout);
-	logger.info("Opened Mathcha in the browser; complete login there if needed");
-	await askToContinue("When Mathcha is logged in, press Enter here to save the session: ");
 	const browser = await puppeteer.connect({ browserURL });
 	try {
 		const cookies = await browser.cookies();
 		const saved = saveMathchaCookies(options.userDataDir, cookies);
 		logger.info(`Saved ${saved.count} Mathcha session cookies to ${saved.destination}`);
+		logger.info("The reopened authenticated browser may now be closed");
 		return { browserPath, configPath, cookiePath: saved.destination };
 	} finally {
 		await browser.disconnect();

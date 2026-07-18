@@ -16,7 +16,7 @@ mise run install
 mise run run -- login
 ```
 
-`login` detects commonly installed Chromium-based browsers, asks which one to use, creates `./user_data`, stores the selected executable path in `./user_data/browser-path`, and opens Mathcha directly so sign-in methods such as Google login remain available. Complete login, then return to the terminal and press Enter. The command extracts only Mathcha cookies through the browser's local debugging endpoint and saves them to `./user_data/mathcha-cookies.json` with mode `0600`.
+`login` detects commonly installed Chromium-based browsers, asks which one to use, creates `./user_data`, stores the selected executable path in `./user_data/browser-path`, and opens Mathcha normally with no debugging or automation flags, so sign-in methods such as Google login remain available. Complete login, close that browser window, then return to the terminal and press Enter. The command reopens the already-authenticated profile with a local debugging endpoint, extracts only Mathcha cookies, and saves them to `./user_data/mathcha-cookies.json` with mode `0600`. The reopened browser may then be closed.
 
 Skip browser selection by passing a detected name or executable path:
 
