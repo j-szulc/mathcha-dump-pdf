@@ -15,6 +15,38 @@ function devtoolsFile(userDataDir) {
 	return path.join(userDataDir, DEVTOOLS_FILENAME);
 }
 
+function activeBrowserPid(userDataDir) {
+	const lock = path.join(userDataDir, "SingletonLock");
+	let target;
+	try {
+		target = fs.readlinkSync(lock);
+	} catch {
+		return null;
+	}
+	const match = target.match(/-(\d+)$/);
+	if (!match) return null;
+	const pid = Number(match[1]);
+	try {
+		process.kill(pid, 0);
+		return pid;
+	} catch {
+		return null;
+	}
+}
+
+async function waitForBrowserExit(pid, timeout) {
+	const deadline = Date.now() + timeout;
+	while (Date.now() < deadline) {
+		try {
+			process.kill(pid, 0);
+		} catch {
+			return;
+		}
+		await delay(100);
+	}
+	throw new Error(`Browser process ${pid} did not exit; quit it manually and run login again`);
+}
+
 function saveMathchaCookies(userDataDir, cookies) {
 	const mathchaCookies = cookies.filter((cookie) =>
 		/(^|\.)mathcha\.io$/i.test(cookie.domain.replace(/^\./, "")),
@@ -59,9 +91,11 @@ async function waitForDevtoolsBrowserUrl(userDataDir, timeout) {
 }
 
 module.exports = {
+	activeBrowserPid,
 	cookieFile,
 	devtoolsFile,
 	loadMathchaCookies,
 	saveMathchaCookies,
+	waitForBrowserExit,
 	waitForDevtoolsBrowserUrl,
 };

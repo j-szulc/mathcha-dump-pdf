@@ -8,6 +8,7 @@ const test = require("node:test");
 const { parseArgs } = require("../bin/mathcha-dump-pdf");
 const { cloneBrowserProfile, createOnlyBrowserPage } = require("../src/browser");
 const {
+	activeBrowserPid,
 	cookieFile,
 	loadMathchaCookies,
 	saveMathchaCookies,
@@ -190,4 +191,14 @@ test("missing extracted cookies instruct the user to login", (context) => {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-cookie-missing-"));
 	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
 	assert.throws(() => loadMathchaCookies(directory), /mathcha-dump-pdf login/);
+});
+
+test("active browser profile locks resolve their owning process", (context) => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "mathcha-profile-lock-"));
+	context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+	fs.symlinkSync(`test-host-${process.pid}`, path.join(directory, "SingletonLock"));
+	assert.equal(activeBrowserPid(directory), process.pid);
+	fs.unlinkSync(path.join(directory, "SingletonLock"));
+	fs.symlinkSync("test-host-99999999", path.join(directory, "SingletonLock"));
+	assert.equal(activeBrowserPid(directory), null);
 });

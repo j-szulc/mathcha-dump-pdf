@@ -8,8 +8,10 @@ const puppeteer = require("puppeteer-core");
 const { chooseBrowser, storeBrowserPath } = require("./browser-config");
 const { withMathchaBrowser } = require("./browser");
 const {
+	activeBrowserPid,
 	devtoolsFile,
 	saveMathchaCookies,
+	waitForBrowserExit,
 	waitForDevtoolsBrowserUrl,
 } = require("./browser-session");
 const { editorUrl } = require("./config");
@@ -1195,6 +1197,12 @@ async function loginMathcha(options) {
 	const browserPath = await chooseBrowser(options.browser);
 	logger.info(`Selected browser: ${browserPath}`);
 	fs.mkdirSync(options.userDataDir, { recursive: true });
+	const existingPid = activeBrowserPid(options.userDataDir);
+	if (existingPid) {
+		throw new Error(
+			`Browser process ${existingPid} is already using ${options.userDataDir}. Quit that browser completely and run login again.`,
+		);
+	}
 	const configPath = storeBrowserPath(options.userDataDir, browserPath);
 	logger.info(`Saved browser path to ${configPath}`);
 
@@ -1209,9 +1217,11 @@ async function loginMathcha(options) {
 	});
 	loginBrowser.unref();
 	logger.info("Opened Mathcha normally, without browser debugging enabled");
-	await askToContinue(
-		"Log in to Mathcha, close that browser window, then press Enter to extract the session: ",
-	);
+	await askToContinue("Log in to Mathcha, then press Enter to extract the session: ");
+	logger.step("Closing the login browser cleanly before cookie extraction");
+	loginBrowser.kill("SIGTERM");
+	await waitForBrowserExit(loginBrowser.pid, options.timeout);
+	logger.info("Login browser closed and profile released");
 
 	fs.rmSync(devtoolsFile(options.userDataDir), { force: true });
 	const extractionBrowser = spawn(
