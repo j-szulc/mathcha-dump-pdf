@@ -7,13 +7,13 @@ Requires Node.js 22.12+ and an installed Chromium-based browser such as Brave, G
 Install dependencies:
 
 ```sh
-PUPPETEER_SKIP_DOWNLOAD=true pnpm install
+mise run install
 ```
 
 ## Log in and select a browser
 
 ```sh
-pnpm start -- login
+mise run run -- login
 ```
 
 `login` is the only interactive command. It detects commonly installed Chromium-based browsers, asks which one to use, opens it with `./user_data`, and waits for you to complete Mathcha login and press Enter. After verifying the session, it stores the selected executable path in `./user_data/browser-path`.
@@ -21,35 +21,52 @@ pnpm start -- login
 Skip browser selection by passing a detected name or executable path:
 
 ```sh
-pnpm start -- login --browser brave
-pnpm start -- login --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+mise run run -- login --browser brave
+mise run run -- login --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
-All other commands read `user_data/browser-path`, run headlessly, and never prompt. If the file is missing, its browser no longer exists, or the Mathcha session has expired, they stop and instruct you to run `login` again.
+All other commands read `user_data/browser-path`, run headlessly by default, and never prompt. Pass `--kiosk` to show their browser actions in a visible window. If the file is missing, its browser no longer exists, or the Mathcha session has expired, they stop and instruct you to run `login` again.
 
 ## Export the account as one directory
 
 ```sh
-pnpm start -- export-as-mathcha-dir exports/account.mathcha
+mise run run -- export-as-mathcha-dir exports/account.mathcha
 ```
 
-This runs headlessly, collapses the sidebar tree, creates a new root directory, moves every existing root document and directory into it through Mathcha's `Move Document` / `Move Directory` dialogs, and uses `Save as .mathcha file`. It waits for both Mathcha's success state and a completed browser download.
+This runs headlessly unless `--kiosk` is passed, collapses the sidebar tree, creates a new root directory, moves every existing root document and directory into it through Mathcha's `Move Document` / `Move Directory` dialogs, and uses `Save as .mathcha file`. It waits for both Mathcha's success state and a completed browser download.
 
 Use the included test archive without reorganizing the account:
 
 ```sh
-pnpm start -- export-as-mathcha-dir exports/test.mathcha --import-instead
+mise run run -- export-as-mathcha-dir exports/test.mathcha --import-instead
 ```
 
 `--import-instead` imports [`test/fixtures/testdata.mathcha`](test/fixtures/testdata.mathcha), identifies the imported root directory, and exports that directory. Use `--test-data PATH` to supply another fixture.
 
+For large accounts, export documents in smaller Mathcha-native batches:
+
+```sh
+mise run run -- export-as-mathcha-dir exports/account.mathcha --batch-size 50
+```
+
+Batch mode recursively expands the complete export directory, selects at most 50 documents at a time, and runs Mathcha's normal export dialog, resource processing, progress reporting, and download for each selection. Mathcha preserves common directory ancestry for multi-document selections; a one-document batch is exported as a root document, matching Mathcha's normal behavior. Mathcha cannot reliably combine a document located directly in a directory with documents from that directory's nested subdirectories, so the planner separates those cases and may produce additional smaller batches. The final progress count is verified before each archive is accepted. A four-batch run produces:
+
+```text
+account.part-001-of-004.mathcha
+account.part-002-of-004.mathcha
+account.part-003-of-004.mathcha
+account.part-004-of-004.mathcha
+```
+
+Batch archives are intentionally independent outputs; they are not merged locally. If the document count fits in one batch, the requested output filename is used unchanged.
+
 ## Print every document in an archive
 
 ```sh
-pnpm start -- print-mathcha test/fixtures/testdata.mathcha --output-dir pdfs
+mise run run -- print-mathcha test/fixtures/testdata.mathcha --output-dir pdfs
 ```
 
-`print-mathcha` runs headlessly. It imports the archive through `Menu > Import from .mathcha file`, expands its directory tree recursively, and for each document:
+`print-mathcha` runs headlessly unless `--kiosk` is passed. It imports the archive through `Menu > Import from .mathcha file`, expands its directory tree recursively, and for each document:
 
 1. opens the document;
 2. presses `Command+P`;
