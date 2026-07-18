@@ -25,7 +25,7 @@ mise run run -- login --browser brave
 mise run run -- login --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
-All other commands read `user_data/browser-path`, run headlessly by default, and never prompt. Pass `--kiosk` to show their browser actions in a visible window. Each automation run uses a temporary clone of `user_data`, so closing its browser does not discard Mathcha's session cookie from the login profile. If the file is missing, its browser no longer exists, or the Mathcha session has expired, they stop and instruct you to run `login` again.
+All other commands read `user_data/browser-path`, run headlessly by default, and never prompt. Pass `--kiosk` to show their browser actions in a visible window. Each automation run uses a temporary clone of `user_data`, closes any tabs restored into that clone, and performs its work in one fresh tab. Closing the automation browser therefore does not discard Mathcha's session cookie from the login profile. If the file is missing, its browser no longer exists, or the Mathcha session has expired, they stop and instruct you to run `login` again.
 
 ## Export the account as one directory
 

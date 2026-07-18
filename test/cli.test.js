@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { parseArgs } = require("../bin/mathcha-dump-pdf");
-const { cloneBrowserProfile } = require("../src/browser");
+const { cloneBrowserProfile, createOnlyBrowserPage } = require("../src/browser");
 const {
 	browserPathFile,
 	loadBrowserPath,
@@ -152,4 +152,19 @@ test("automation profile clones retain state without active-browser lock files",
 	assert.equal(fs.readFileSync(path.join(clone, "Default", "Cookies"), "utf8"), "session state");
 	assert.equal(fs.existsSync(path.join(clone, "SingletonLock")), false);
 	assert.equal(fs.existsSync(path.join(clone, "DevToolsActivePort")), false);
+});
+
+test("automation creates one fresh tab and closes all restored tabs", async () => {
+	const closed = [];
+	const restored = [
+		{ close: async () => closed.push("first") },
+		{ close: async () => closed.push("second") },
+	];
+	const fresh = { id: "fresh" };
+	const browser = {
+		pages: async () => restored,
+		newPage: async () => fresh,
+	};
+	assert.equal(await createOnlyBrowserPage(browser), fresh);
+	assert.deepEqual(closed.sort(), ["first", "second"]);
 });

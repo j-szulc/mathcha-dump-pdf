@@ -52,6 +52,16 @@ function cloneBrowserProfile(userDataDir) {
 	}
 }
 
+async function createOnlyBrowserPage(browser) {
+	const leftoverPages = await browser.pages();
+	const page = await browser.newPage();
+	await Promise.all(leftoverPages.map((leftover) => leftover.close()));
+	logger.debug(
+		`Closed ${leftoverPages.length} restored browser tab${leftoverPages.length === 1 ? "" : "s"}`,
+	);
+	return page;
+}
+
 async function withMathchaBrowser(options, work) {
 	const executablePath = options.browserPath || loadBrowserPath(options.userDataDir);
 	fs.mkdirSync(options.userDataDir, { recursive: true });
@@ -77,8 +87,8 @@ async function withMathchaBrowser(options, work) {
 	);
 	let page;
 	try {
-		page = (await browser.pages())[0] || (await browser.newPage());
-		logger.debug(`Using browser page ${page.url() || "about:blank"}`);
+		page = await createOnlyBrowserPage(browser);
+		logger.debug("Created the sole automation browser tab");
 		page.setDefaultTimeout(options.timeout);
 		page.setDefaultNavigationTimeout(options.timeout);
 		await page.setViewport(viewport);
@@ -118,4 +128,4 @@ async function withMathchaBrowser(options, work) {
 	}
 }
 
-module.exports = { cloneBrowserProfile, withMathchaBrowser };
+module.exports = { cloneBrowserProfile, createOnlyBrowserPage, withMathchaBrowser };
