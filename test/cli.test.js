@@ -12,7 +12,7 @@ const {
 	resolveRequestedBrowser,
 	storeBrowserPath,
 } = require("../src/browser-config");
-const { formatBytes, formatDuration, percentage } = require("../src/logger");
+const { formatBytes, formatDuration, formatLogLine, percentage } = require("../src/logger");
 const { buildDocumentBatches } = require("../src/mathcha");
 const { safePathSegment } = require("../src/utils");
 
@@ -94,6 +94,13 @@ test("progress logging helpers format sizes, durations, and percentages", () => 
 	assert.equal(formatBytes(1536), "1.50 KiB");
 	assert.equal(formatDuration(1500), "1.5 s");
 	assert.equal(percentage(2, 4), "50%");
+});
+
+test("log lines color severity and timing metadata when colors are enabled", () => {
+	const line = formatLogLine("WARN", "Careful", { color: true });
+	assert.match(line, /\u001b\[/);
+	assert.match(line, /\[WARN\].*Careful/);
+	assert.doesNotMatch(formatLogLine("WARN", "Careful", { color: false }), /\u001b\[/);
 });
 
 test("browser path is stored inside user_data and loaded for later commands", (context) => {

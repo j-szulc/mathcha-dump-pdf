@@ -1,5 +1,7 @@
 "use strict";
 
+const pc = require("picocolors");
+
 const processStartedAt = process.hrtime.bigint();
 let debugEnabled = false;
 
@@ -7,8 +9,26 @@ function elapsedSeconds() {
 	return Number(process.hrtime.bigint() - processStartedAt) / 1_000_000_000;
 }
 
+function formatLogLine(level, message, { color = pc.isColorSupported } = {}) {
+	const colors = color === pc.isColorSupported ? pc : pc.createColors(color);
+	const levelColors = {
+		DEBUG: colors.gray,
+		ERROR: colors.red,
+		INFO: colors.blue,
+		PROGRESS: colors.magenta,
+		STEP: colors.green,
+		WARN: colors.yellow,
+	};
+	const timestamp = `[${new Date().toISOString()}]`;
+	const severity = `[${level}]`;
+	const elapsed = `[+${elapsedSeconds().toFixed(1)}s]`;
+	if (!color) return `${timestamp} ${severity} ${elapsed} ${message}`;
+	const colorLevel = levelColors[level] || colors.white;
+	return `${colors.dim(timestamp)} ${colorLevel(severity)} ${colors.cyan(elapsed)} ${message}`;
+}
+
 function write(level, message) {
-	const line = `[${new Date().toISOString()}] [${level}] [+${elapsedSeconds().toFixed(1)}s] ${message}`;
+	const line = formatLogLine(level, message);
 	const stream = level === "ERROR" || level === "WARN" ? process.stderr : process.stdout;
 	stream.write(`${line}\n`);
 }
@@ -66,6 +86,7 @@ const logger = {
 module.exports = {
 	formatBytes,
 	formatDuration,
+	formatLogLine,
 	logger,
 	percentage,
 };

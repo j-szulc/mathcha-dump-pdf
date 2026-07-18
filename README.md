@@ -78,7 +78,7 @@ PDFs reproduce the imported directory structure below the output directory. Exis
 
 ## Terminal progress logging
 
-All commands continuously report their work with an ISO timestamp, severity, and elapsed command time. The log covers browser startup and shutdown, Mathcha readiness and login, import/export dialog progress, directory moves and expansion, archive/PDF write sizes, per-document counts and percentages, print-preview layout, and stage durations. For example:
+All commands continuously report their work with a color-coded severity, ISO timestamp, and elapsed command time. Color is enabled when the output terminal supports it and respects the standard `NO_COLOR` environment variable. The log covers browser startup and shutdown, Mathcha readiness and login, import/export dialog progress, directory moves and expansion, archive/PDF write sizes, per-document counts and percentages, print-preview layout, and stage durations. For example:
 
 ```text
 [2026-07-18T12:34:56.789Z] [STEP] [+2.1s] Mathcha import started
