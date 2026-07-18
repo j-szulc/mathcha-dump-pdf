@@ -44,7 +44,7 @@ function createProgressBar(label, total, options = {}) {
 		throw new TypeError("Progress bar total must be a positive integer");
 	}
 	const stream = options.stream || process.stderr;
-	const bar = new ProgressBar(`${label} [:bar] :current/:total (:percent) :detail`, {
+	const bar = new ProgressBar(`${label} [:bar] :current/:total (:percent) elapsed :elapseds eta :etas :detail`, {
 		complete: "█",
 		head: "█",
 		incomplete: "░",

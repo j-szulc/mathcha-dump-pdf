@@ -118,7 +118,7 @@ test("determinate progress uses progress bars", () => {
 	progressBar.tick("First");
 	progressBar.tick("Second");
 	assert.match(output, /Documents \[/);
-	assert.match(output, /2\/2 \(100%\) Second/);
+	assert.match(output, /2\/2 \(100%\) elapsed \d+(?:\.\d+)?s eta \d+(?:\.\d+)?s Second/);
 });
 
 test("browser path is stored inside user_data and loaded for later commands", (context) => {
